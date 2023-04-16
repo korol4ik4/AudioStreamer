@@ -1,7 +1,7 @@
 import sounddevice as sd
 import queue
 import sys
-from time import sleep, time
+from time import time
 from threading import Thread
 
 
@@ -18,10 +18,21 @@ class AudioStreamer:
         self.que =queue.Queue(queue_max_size)
         self.run = False
         self.file_to_save = None
-        self.save_on(filename_to_save)
+        self.save(filename_to_save)
         self.full_buffer_wait_sec = full_buffer_wait_sec
         self.max_fail = 7
         self.fail = 0
+
+    def save(self, filename):
+        if filename:
+            fts = open(filename, 'wb')
+            self.file_to_save = fts
+            return fts
+
+    def save_stop(self):
+        if self.file_to_save:
+            self.file_to_save.close()
+            self.file_to_save = None
 
     @staticmethod
     def _dtype_len(dtype:str):
@@ -36,24 +47,16 @@ class AudioStreamer:
                 dtypelen = 2
         return dtypelen
 
-    def save_on(self,filename):
-        if filename:
-            fts = open(filename, 'wb')
-            self.file_to_save = fts
-            return fts
-
-    def save_off(self):
-        if self.file_to_save:
-            self.file_to_save.close()
-            self.file_to_save = None
-
     def microphone_stream(self):
         def callback(indata, frames, time, status):
             if status:
                 print(status, file=sys.stderr)
             self.que.put(bytes(indata))  ## BYTES !!!!!!!!
             if self.file_to_save:
-                self.file_to_save.write(bytes(indata))
+                try:
+                    self.file_to_save.write(bytes(indata))
+                except ValueError as e:
+                    self.file_to_save = None  # pass
 
         def stream(samplerate, blocksize, device, dtype, channels, callback):
             try:
@@ -61,7 +64,7 @@ class AudioStreamer:
                                        dtype=dtype, channels=channels, callback=callback):
                     self.run = True
                     while self.run:
-                        sleep(0.01)
+                        pass
             except Exception as e:
                 self.run = False
                 raise Exception("stream fail ", e)
@@ -82,7 +85,8 @@ class AudioStreamer:
                     fn.seek(sk)
                     if data:
                         try:
-                            self.que.put(data)
+                            if len(data) == blocklen:  # discard incomplete block
+                                self.que.put(data)
                         except queue.Full:  # wait and put last block
                             tm = time()
                             wait_sec = self.full_buffer_wait_sec
@@ -90,7 +94,7 @@ class AudioStreamer:
                             while self.que.full() and self.run:
                                 if wait_sec and  wait_sec < time()-tm :
                                     break
-                            if not self.que.full():
+                            if self.que.not_full:
                                 self.que.put(data)
                             else:
                                 self.run= False
@@ -127,33 +131,12 @@ class AudioStreamer:
                                     channels=self.channels, callback=callback_output):
                 self.run = True
                 while self.run:
-                    sleep(0.01)
+                    pass
 
         thr = Thread(target=stream)
         thr.start()
 
-
-
-### save microphone
-'''
-ms = AudioStreamer()
-que = ms.microphone_stream()
-ms.save_on(filename = "test.pcm")
-tm = time()
-while time()-tm < 5:
-    try:
-        data = que.get_nowait()
-        print("data ",len(data))
-    except:
-        pass
-ms.save_off()
-ms.run =False
-'''
-ms = AudioStreamer()
-que = ms.file_stream("test.pcm")
-ps = AudioStreamer()
-ps.play_stream(que)
-sleep(5)
-ms.run =False
-
-
+    def stop(self):
+        self.run = False
+        if self.file_to_save:
+            self.save_stop()
