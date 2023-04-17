@@ -7,8 +7,7 @@ from threading import Thread
 
 class AudioStreamer:
     def __init__(self, samplerate = 16000, blocksize = 8000, device = None,
-                 dtype = 'int16', channels = 1, filename_to_save = None, queue_max_size=0,
-                 full_buffer_wait_sec = 0):
+                 dtype = 'int16', channels = 1, filename_to_save = None, queue_max_size=0):
         self.samplerate = samplerate
         self.blocksize = blocksize
         self.device = device
@@ -19,7 +18,6 @@ class AudioStreamer:
         self.run = False
         self.file_to_save = None
         self.save(filename_to_save)
-        self.full_buffer_wait_sec = full_buffer_wait_sec
         self.max_fail = 7
         self.fail = 0
 
@@ -88,12 +86,8 @@ class AudioStreamer:
                             if len(data) == blocklen:  # discard incomplete block
                                 self.que.put(data)
                         except queue.Full:  # wait and put last block
-                            tm = time()
-                            wait_sec = self.full_buffer_wait_sec
-
                             while self.que.full() and self.run:
-                                if wait_sec and  wait_sec < time()-tm :
-                                    break
+                                pass
                             if self.que.not_full:
                                 self.que.put(data)
                             else:
@@ -115,7 +109,7 @@ class AudioStreamer:
             except queue.Empty:
                 outdata[:] = b'\0' * self.blocksize * self.dtypelen
                 if self.fail > self.max_fail:
-                    self.run = False
+                    self.stop()
                     print("exit, not to play")
                 else:
                     self.fail += 1
@@ -132,9 +126,19 @@ class AudioStreamer:
                 self.run = True
                 while self.run:
                     pass
-
         thr = Thread(target=stream)
         thr.start()
+
+    def save_streram(self, que, filename):
+        self.save(filename)
+        self.run = True
+        while self.run:
+            try:
+                data = que.get_nowait()
+                self.file_to_save.write(data)
+            except queue.Empty:
+                pass
+        self.stop()
 
     def stop(self):
         self.run = False
