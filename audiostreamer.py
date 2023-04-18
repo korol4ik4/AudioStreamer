@@ -66,7 +66,7 @@ class AudioStreamer:
             except Exception as e:
                 self.run = False
                 raise Exception("stream fail ", e)
-        thr = Thread(target=stream, args=(self.samplerate, self.blocksize, self.device, 'int16', 1,callback) )
+        thr = Thread(target=stream, args=(self.samplerate, self.blocksize, self.device, self.dtype, 1,callback) )
         thr.start()
         return self.que
 
@@ -115,6 +115,7 @@ class AudioStreamer:
                     self.fail += 1
             except BaseException as e:
                 print(e)
+            finally:
                 if self.file_to_save:
                     print(" close file to save")
                     self.file_to_save.close()
