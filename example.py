@@ -1,25 +1,26 @@
+# Example make by korol4ik
 from audiostreamer import AudioStreamer
-from time import sleep
 
-
-### save microphone to file
-
-ms = AudioStreamer(blocksize=8)
+### stream microphone
+ms = AudioStreamer()  # (blocksize=8)
 mque = ms.microphone_stream()  # mque = queue for microphone must geted
-ms.save(filename ="test.pcm")
+ms.save(filename ="test2.pcm")  # save to file
 print('save from microphone')
-input('for play saved inter return')
+input('for play saved inter return')  # wait
 print('play..')
 ms.stop()  # stop to mic stream
 
 # stream file
-fs = AudioStreamer(queue_max_size=4)
-fque = fs.file_stream("test.pcm")
-sleep(2)
-# play stream
-ps = AudioStreamer(samplerate=16000, filename_to_save="test2.pcm")
+fs = AudioStreamer(queue_max_size=10)  # (queue_max_size=1) by file read not full file  in memory
+fque = fs.file_stream("test2.pcm")
+
+# play and save stream
+ps = AudioStreamer(filename_to_save="testOutStream.pcm")
 ps.play_stream(fque)
-#sleep(10)
+'''
+while fque.qsize() > 0:
+    print(fque.qsize())
+'''
 
 
 
